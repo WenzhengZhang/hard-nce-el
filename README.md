@@ -1,2 +1,2 @@
 # hard-nce-el
-codes coming soon..
+code coming soon..
