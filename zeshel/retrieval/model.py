@@ -1,4 +1,4 @@
-from transformers import BertModel, BertPreTrainedModel, BertConfig
+from transformers import BertConfig
 import torch
 import torch.nn as nn
 import copy
@@ -14,10 +14,8 @@ class PolyAttention(nn.Module):
     Implements simple/classical attention.
     """
 
-    def __init__(self, dim=1, attn='cosine', residual=False, get_weights=True):
+    def __init__(self, dim=1, attn='basic', residual=False, get_weights=True):
         super().__init__()
-        if attn == 'cosine':
-            self.cosine = nn.CosineSimilarity(dim=dim)
         self.attn = attn
         self.dim = dim
         self.get_weights = get_weights
@@ -34,13 +32,10 @@ class PolyAttention(nn.Module):
             mask_ys: B x key_len (mask)
             values: B x value_len x dim (values); if None, default to ys
         """
-        if self.attn == 'cosine':
-            l1 = self.cosine(xs, ys).unsqueeze(self.dim - 1)
-        else:
-            l1 = torch.matmul(xs, ys.transpose(-1, -2))
-            if self.attn == 'sqrt':
-                d_k = ys.size(-1)
-                l1 = l1 / math.sqrt(d_k)
+        l1 = torch.matmul(xs, ys.transpose(-1, -2))
+        if self.attn == 'sqrt':
+            d_k = ys.size(-1)
+            l1 = l1 / math.sqrt(d_k)
         if mask_ys is not None:
             attn_mask = (mask_ys == 0).unsqueeze(-2)
             l1.masked_fill_(attn_mask, -NEAR_INF)
@@ -112,11 +107,11 @@ class SoftAttention(nn.Module):
         return scores
 
 
-class UnifiedModel(nn.Module):
+class UnifiedRetriever(nn.Module):
     def __init__(self, encoder, device, num_codes_mention, num_codes_entity,
                  mention_use_codes, entity_use_codes, attention_type,
                  candidates_embeds=None, evaluate_on=False):
-        super(UnifiedModel, self).__init__()
+        super(UnifiedRetriever, self).__init__()
         self.mention_use_codes = mention_use_codes
         self.entity_use_codes = entity_use_codes
         self.attention_type = attention_type

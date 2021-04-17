@@ -1,5 +1,5 @@
 import torch
-from model import UnifiedModel
+from model import UnifiedRetriever
 from data import ZeshelDataset, transform_entities, load_data, \
     get_all_entity_hiddens, get_hard_negative, \
     Data, Logger
@@ -12,7 +12,7 @@ from transformers import BertTokenizer, BertModel, AdamW, \
     get_linear_schedule_with_warmup, get_constant_schedule, RobertaTokenizer, \
     RobertaModel
 from torch.utils.data import DataLoader
-from datetime import datetime
+from tqdm import tqdm
 
 
 def set_seeds(args):
@@ -72,7 +72,7 @@ def evaluate(mention_loader, model, all_candidates_embeds, k, device,
     r_k = 0
     acc = 0
     with torch.no_grad():
-        for i, batch in enumerate(mention_loader):
+        for i, batch in tqdm(enumerate(mention_loader)):
             if not too_large:
                 scores = model(batch[0], batch[1], None, None)
             else:
@@ -149,9 +149,9 @@ def main(args):
     else:
         num_mention_vecs = args.num_mention_vecs
         num_entity_vecs = args.num_entity_vecs
-    model = UnifiedModel(encoder, device, num_mention_vecs, num_entity_vecs,
-                         args.mention_use_codes, args.entity_use_codes,
-                         attention_type, None, False)
+    model = UnifiedRetriever(encoder, device, num_mention_vecs, num_entity_vecs,
+                             args.mention_use_codes, args.entity_use_codes,
+                             attention_type, None, False)
     if args.resume_training:
         cpt = torch.load(args.model) if device.type == 'cuda' \
             else torch.load(args.model, map_location=torch.device('cpu'))
@@ -332,9 +332,9 @@ def main(args):
         encoder = RobertaModel.from_pretrained('roberta-base')
     else:
         raise ValueError('wrong encoder type')
-    model = UnifiedModel(encoder, device, num_mention_vecs, num_entity_vecs,
-                         args.mention_use_codes, args.entity_use_codes,
-                         attention_type, None, False)
+    model = UnifiedRetriever(encoder, device, num_mention_vecs, num_entity_vecs,
+                             args.mention_use_codes, args.entity_use_codes,
+                             attention_type, None, False)
     model.load_state_dict(new_state_dict)
     if dp:
         logger.log('Data parallel across {:d} GPUs {:s}'
