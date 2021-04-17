@@ -63,8 +63,10 @@ def evaluate(mention_loader, model, all_candidates_embeds, k, device,
     model.eval()
     if not too_large:
         if hasattr(model, 'module'):
+            model.module.evaluate_on = True
             model.module.candidates_embeds = all_candidates_embeds
         else:
+            model.evaluate_on = True
             model.candidates_embeds = all_candidates_embeds
     nb_samples = 0
     r_k = 0
@@ -80,8 +82,10 @@ def evaluate(mention_loader, model, all_candidates_embeds, k, device,
                                              'en_hiddens_%s.pt' % j)
                     en_embeds = torch.load(file_path)
                     if hasattr(model, 'module'):
+                        model.module.evaluate_on = True
                         model.module.candidates_embeds = en_embeds
                     else:
+                        model.evaluate_on = True
                         model.candidates_embeds = en_embeds
                     score = model(batch[0], batch[1], None,
                                   None).detach()
@@ -96,8 +100,10 @@ def evaluate(mention_loader, model, all_candidates_embeds, k, device,
     r_k /= nb_samples
     acc /= nb_samples
     if hasattr(model, 'module'):
+        model.module.evaluate_on = False
         model.module.candidates_embeds = None
     else:
+        model.evaluate_on = False
         model.candidates_embeds = None
     return r_k, acc
 
@@ -145,7 +151,7 @@ def main(args):
         num_entity_vecs = args.num_entity_vecs
     model = UnifiedModel(encoder, device, num_mention_vecs, num_entity_vecs,
                          args.mention_use_codes, args.entity_use_codes,
-                         attention_type, None)
+                         attention_type, None, False)
     if args.resume_training:
         cpt = torch.load(args.model) if device.type == 'cuda' \
             else torch.load(args.model, map_location=torch.device('cpu'))
@@ -326,22 +332,9 @@ def main(args):
         encoder = RobertaModel.from_pretrained('roberta-base')
     else:
         raise ValueError('wrong encoder type')
-    if args.type_model == 'poly':
-        attention_type = 'soft_attention'
-    else:
-        attention_type = 'hard_attention'
-    if args.type_model == 'dual':
-        num_mention_vecs = 1
-        num_entity_vecs = 1
-    elif args.type_model == 'multi_vector':
-        num_mention_vecs = 1
-        num_entity_vecs = args.num_entity_vecs
-    else:
-        num_mention_vecs = args.num_mention_vecs
-        num_entity_vecs = args.num_entity_vecs
     model = UnifiedModel(encoder, device, num_mention_vecs, num_entity_vecs,
                          args.mention_use_codes, args.entity_use_codes,
-                         attention_type, None)
+                         attention_type, None, False)
     model.load_state_dict(new_state_dict)
     if dp:
         logger.log('Data parallel across {:d} GPUs {:s}'
@@ -411,9 +404,6 @@ if __name__ == '__main__':
     parser.add_argument('--simpleoptim', action='store_true',
                         help='simple optimizer (constant schedule, '
                              'no weight decay?')
-    parser.add_argument('--type_loss', type=str, default='global_nce',
-                        choices=['local_nce', 'global_nce', 'simple_loss'],
-                        help='use local NCE loss? ')
     parser.add_argument('--clip', type=float, default=1,
                         help='gradient clipping [%(default)g]')
     parser.add_argument('--logging_steps', type=int, default=1000,

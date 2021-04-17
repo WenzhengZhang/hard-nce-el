@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import json
 from torch.utils.data import DataLoader, Dataset
 import os
@@ -9,16 +8,110 @@ from tqdm import tqdm
 import sys
 
 
-class ZeshelDataset(Dataset):
-    def __init__(self, tokenizer, mentions, doc, max_len,
-                 candidates, device, num_rands, type_cands,
-                 all_entity_token_ids, all_entity_masks):
+class EntitySet(Dataset):
+    def __init__(self, tokenizer, all_entity_token_ids, all_entity_masks):
+        self.tokenizer = tokenizer
+        self.all_entity_token_ids = all_entity_token_ids
+        self.all_entity_masks = all_entity_masks
+
+    def __len__(self):
+        return len(self.all_entity_token_ids)
+
+    def __getitem__(self, index):
+        """
+
+        :param index: The index of mention
+        :return: mention_token_ids,mention_masks,entity_token_ids,entity_masks : 1 X L
+                entity_hard_token_ids, entity_hard_masks: k X L  (k<=10)
+        """
+        # process entity(for in batch training)
+        entity_token_ids = self.all_entity_token_ids[index]
+        entity_masks = self.all_entity_masks[index]
+        entity_token_ids = torch.tensor(entity_token_ids).long()
+        entity_masks = torch.tensor(entity_masks).long()
+        return entity_token_ids, entity_masks
+
+
+class MentionSet(Dataset):
+    def __init__(self, tokenizer, mentions, doc, max_len):
         self.tokenizer = tokenizer
         self.mentions = mentions
         self.doc = doc
         self.max_len = max_len  # the max  length of input (mention or entity)
         self.Ms = '[unused0]'
         self.Me = '[unused1]'
+        self.all_entity_indices = {x: index for index, x in
+                                   enumerate(list(self.doc.keys()))}
+
+    def __len__(self):
+        return len(self.mentions)
+
+    def __getitem__(self, index):
+        """
+
+        :param index: The index of mention
+        :return: mention_token_ids,mention_masks,entity_token_ids,entity_masks : 1 X L
+                entity_hard_token_ids, entity_hard_masks: k X L  (k<=10)
+        """
+        # process mention
+        mention = self.mentions[index]
+        mention_window = self.get_mention_window(mention)
+        mention_encoded_dict = self.tokenizer.encode_plus(mention_window,
+                                                          add_special_tokens=True,
+                                                          max_length=self.max_len,
+                                                          pad_to_max_length=True,
+                                                          truncation=True)
+        mention_token_ids = mention_encoded_dict['input_ids']
+        mention_masks = mention_encoded_dict['attention_mask']
+        # process entity(for in batch training)
+        target_page_id = mention['label_document_id']
+        label = self.all_entity_indices[target_page_id]
+        label = torch.tensor([label]).long()
+        mention_token_ids = torch.tensor(mention_token_ids).long()
+        mention_masks = torch.tensor(mention_masks).long()
+        return mention_token_ids, mention_masks, label
+
+    def get_mention_window(self, mention):
+        page_id = mention['context_document_id']
+        tokens = self.doc[page_id]['text'].split()
+        max_mention_len = self.max_len - 2  # cls and sep
+
+        # assert men == context_tokens[start_index:end_index]
+        ctx_l = tokens[max(0, mention['start_index'] - max_mention_len - 1):
+                       mention['start_index']]
+        ctx_r = tokens[mention['end_index'] + 1:
+                       mention['end_index'] + max_mention_len + 2]
+        men = tokens[mention['start_index']:mention['end_index'] + 1]
+
+        ctx_l = ' '.join(ctx_l)
+        ctx_r = ' '.join(ctx_r)
+        men = ' '.join(men)
+        men = self.tokenizer.tokenize(men)
+        ctx_l = self.tokenizer.tokenize(ctx_l)
+        ctx_r = self.tokenizer.tokenize(ctx_r)
+        return self.help_mention_window(ctx_l, men, ctx_r, max_mention_len)
+
+    def help_mention_window(self, ctx_l, mention, ctx_r, max_len):
+        if len(mention) >= max_len:
+            window = mention[:max_len]
+            return window
+        leftover = max_len - len(mention) - 2  # [Ms] token and [Me] token
+        leftover_hf = leftover // 2
+        if len(ctx_l) > leftover_hf:
+            ctx_l_len = leftover_hf if len(
+                ctx_r) > leftover_hf else leftover - len(ctx_r)
+        else:
+            ctx_l_len = len(ctx_l)
+        window = ctx_l[-ctx_l_len:] + [self.Ms] + mention + [self.Me] + ctx_r
+        window = window[:max_len]
+        return window
+
+
+class ZeshelDataset(MentionSet):
+    def __init__(self, tokenizer, mentions, doc, max_len,
+                 candidates, device, num_rands, type_cands,
+                 all_entity_token_ids, all_entity_masks):
+        super(ZeshelDataset, self).__init__(tokenizer, mentions, doc, max_len)
         self.ENT = '[unused2]'
         self.device = device
         self.candidates = candidates
@@ -26,12 +119,7 @@ class ZeshelDataset(Dataset):
         self.type_cands = type_cands
         self.all_entity_token_ids = all_entity_token_ids
         self.all_entity_masks = all_entity_masks
-        self.all_entity_indices = {x: index for index, x in
-                                   enumerate(list(self.doc.keys()))}
         random.seed(42)
-
-    def __len__(self):
-        return len(self.mentions)
 
     def __getitem__(self, index):
         """
@@ -104,44 +192,8 @@ class ZeshelDataset(Dataset):
             return mention_token_ids, mention_masks, candidate_token_ids, \
                    candidate_masks
 
-    def get_mention_window(self, mention):
-        page_id = mention['context_document_id']
-        tokens = self.doc[page_id]['text'].split()
-        max_mention_len = self.max_len - 2  # cls and sep
 
-        # assert men == context_tokens[start_index:end_index]
-        ctx_l = tokens[max(0, mention['start_index'] - max_mention_len - 1):
-                       mention['start_index']]
-        ctx_r = tokens[mention['end_index'] + 1:
-                       mention['end_index'] + max_mention_len + 2]
-        mention_tokens = tokens[mention['start_index']:mention['end_index'] + 1]
-
-        ctx_l = ' '.join(ctx_l)
-        ctx_r = ' '.join(ctx_r)
-        mention_tokens = ' '.join(mention_tokens)
-        mention_tokens = self.tokenizer.tokenize(mention_tokens)
-        ctx_l = self.tokenizer.tokenize(ctx_l)
-        ctx_r = self.tokenizer.tokenize(ctx_r)
-        return self.help_mention_window(ctx_l, mention_tokens, ctx_r,
-                                        max_mention_len)
-
-    def help_mention_window(self, ctx_l, mention, ctx_r, max_len):
-        if len(mention) >= max_len:
-            window = mention[:max_len]
-            return window
-        leftover = max_len - len(mention) - 2  # [Ms] token and [Me] token
-        leftover_hf = leftover // 2
-        if len(ctx_l) > leftover_hf:
-            ctx_l_len = leftover_hf if len(
-                ctx_r) > leftover_hf else leftover - len(ctx_r)
-        else:
-            ctx_l_len = len(ctx_l)
-        window = ctx_l[-ctx_l_len:] + [self.Ms] + mention + [self.Me] + ctx_r
-        window = window[:max_len]
-        return window
-
-
-def transform_entities(doc, len_max, tokenizer):  # get all entities token 
+def transform_entities(doc, len_max, tokenizer):  # get all entities token
     # ids and token masks
     def get_entity_window(en_page_id):
         page_id = en_page_id
@@ -272,8 +324,10 @@ def get_hard_negative(mention_loader, model,
     model.eval()
     if not too_large:
         if hasattr(model, 'module'):
+            model.module.evaluate_on = True
             model.module.candidates_embeds = all_candidates_embeds
         else:
+            model.evaluate_on = True
             model.candidates_embeds = all_candidates_embeds
     hard_indices = []
     all_candidates_probs = []
@@ -288,15 +342,17 @@ def get_hard_negative(mention_loader, model,
                                              'en_hiddens_%s.pt' % j)
                     en_embeds = torch.load(file_path)
                     if hasattr(model, 'module'):
+                        model.module.evaluate_on = True
                         model.module.candidates_embeds = en_embeds
                     else:
+                        model.evaluate_on = True
                         model.candidates_embeds = en_embeds
                     score = model(batch[0], batch[1], None,
                                   None).detach()
                     scores.append(score)
                 scores = torch.cat(scores, dim=1)
             if distribution_sampling:
-                scores = scores*smoothing_value
+                scores = scores * smoothing_value
             if exclude_golds:
                 label_cols = batch[2].view(-1).to(device)
                 label_rows = torch.arange(scores.size(0)).to(device)
@@ -314,8 +370,10 @@ def get_hard_negative(mention_loader, model,
             hard_indices.append(hard_cands)
     hard_indices = torch.cat(hard_indices, dim=0).tolist()
     if hasattr(model, 'module'):
+        model.module.evaluate_on = False
         model.module.candidates_embeds = None
     else:
+        model.evaluate_on = False
         model.candidates_embeds = None
     if adjust_logits:
         all_candidates_probs = torch.cat(all_candidates_probs,
@@ -341,105 +399,6 @@ def distribution_sample(probs, num_cands, device):
     else:
         candidates = torch.multinomial(probs, num_cands, replacement=False)
     return candidates
-
-
-class EntitySet(Dataset):
-    def __init__(self, tokenizer, all_entity_token_ids, all_entity_masks):
-        self.tokenizer = tokenizer
-        self.all_entity_token_ids = all_entity_token_ids
-        self.all_entity_masks = all_entity_masks
-
-    def __len__(self):
-        return len(self.all_entity_token_ids)
-
-    def __getitem__(self, index):
-        """
-
-        :param index: The index of mention
-        :return: mention_token_ids,mention_masks,entity_token_ids,entity_masks : 1 X L
-                entity_hard_token_ids, entity_hard_masks: k X L  (k<=10)
-        """
-        # process entity(for in batch training)
-        entity_token_ids = self.all_entity_token_ids[index]
-        entity_masks = self.all_entity_masks[index]
-        entity_token_ids = torch.tensor(entity_token_ids).long()
-        entity_masks = torch.tensor(entity_masks).long()
-        return entity_token_ids, entity_masks
-
-
-class MentionSet(Dataset):
-    def __init__(self, tokenizer, mentions, doc, max_len):
-        self.tokenizer = tokenizer
-        self.mentions = mentions
-        self.doc = doc
-        self.max_len = max_len  # the max  length of input (mention or entity)
-        self.Ms = '[unused0]'
-        self.Me = '[unused1]'
-        self.all_entity_indices = {x: index for index, x in
-                                   enumerate(list(self.doc.keys()))}
-
-    def __len__(self):
-        return len(self.mentions)
-
-    def __getitem__(self, index):
-        """
-
-        :param index: The index of mention
-        :return: mention_token_ids,mention_masks,entity_token_ids,entity_masks : 1 X L
-                entity_hard_token_ids, entity_hard_masks: k X L  (k<=10)
-        """
-        # process mention
-        mention = self.mentions[index]
-        mention_window = self.get_mention_window(mention)
-        mention_encoded_dict = self.tokenizer.encode_plus(mention_window,
-                                                          add_special_tokens=True,
-                                                          max_length=self.max_len,
-                                                          pad_to_max_length=True,
-                                                          truncation=True)
-        mention_token_ids = mention_encoded_dict['input_ids']
-        mention_masks = mention_encoded_dict['attention_mask']
-        # process entity(for in batch training)
-        target_page_id = mention['label_document_id']
-        label = self.all_entity_indices[target_page_id]
-        label = torch.tensor([label]).long()
-        mention_token_ids = torch.tensor(mention_token_ids).long()
-        mention_masks = torch.tensor(mention_masks).long()
-        return mention_token_ids, mention_masks, label
-
-    def get_mention_window(self, mention):
-        page_id = mention['context_document_id']
-        tokens = self.doc[page_id]['text'].split()
-        max_mention_len = self.max_len - 2  # cls and sep
-
-        # assert men == context_tokens[start_index:end_index]
-        ctx_l = tokens[max(0, mention['start_index'] - max_mention_len - 1):
-                       mention['start_index']]
-        ctx_r = tokens[mention['end_index'] + 1:
-                       mention['end_index'] + max_mention_len + 2]
-        men = tokens[mention['start_index']:mention['end_index'] + 1]
-
-        ctx_l = ' '.join(ctx_l)
-        ctx_r = ' '.join(ctx_r)
-        men = ' '.join(men)
-        men = self.tokenizer.tokenize(men)
-        ctx_l = self.tokenizer.tokenize(ctx_l)
-        ctx_r = self.tokenizer.tokenize(ctx_r)
-        return self.help_mention_window(ctx_l, men, ctx_r, max_mention_len)
-
-    def help_mention_window(self, ctx_l, mention, ctx_r, max_len):
-        if len(mention) >= max_len:
-            window = mention[:max_len]
-            return window
-        leftover = max_len - len(mention) - 2  # [Ms] token and [Me] token
-        leftover_hf = leftover // 2
-        if len(ctx_l) > leftover_hf:
-            ctx_l_len = leftover_hf if len(
-                ctx_r) > leftover_hf else leftover - len(ctx_r)
-        else:
-            ctx_l_len = len(ctx_l)
-        window = ctx_l[-ctx_l_len:] + [self.Ms] + mention + [self.Me] + ctx_r
-        window = window[:max_len]
-        return window
 
 
 class Data:

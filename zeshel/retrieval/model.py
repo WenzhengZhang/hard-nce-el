@@ -115,7 +115,7 @@ class SoftAttention(nn.Module):
 class UnifiedModel(nn.Module):
     def __init__(self, encoder, device, num_codes_mention, num_codes_entity,
                  mention_use_codes, entity_use_codes, attention_type,
-                 candidates_embeds=None):
+                 candidates_embeds=None, evaluate_on=False):
         super(UnifiedModel, self).__init__()
         self.mention_use_codes = mention_use_codes
         self.entity_use_codes = entity_use_codes
@@ -126,6 +126,7 @@ class UnifiedModel(nn.Module):
         self.loss_fct = CrossEntropyLoss()
         self.num_mention_vecs = num_codes_mention
         self.num_entity_vecs = num_codes_entity
+        self.evaluate_on = evaluate_on
         if self.mention_use_codes:
             self.embed_dim = BertConfig().hidden_size
             mention_codes = torch.empty(self.num_mention_vecs, self.embed_dim)
@@ -221,7 +222,7 @@ class UnifiedModel(nn.Module):
 
     def forward(self, mention_token_ids, mention_masks, candidate_token_ids,
                 candidate_masks, candidate_probs=None):
-        if self.candidates_embeds is not None:  # evaluate or get candidates
+        if self.evaluate_on:  # evaluate or get candidates
             mention_embeds, mention_embeds_masks = self.encode(
                 mention_token_ids, mention_masks, None, None)[:2]
             bsz, l_x, mention_dim = mention_embeds.size()
