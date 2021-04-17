@@ -278,7 +278,7 @@ def get_hard_negative(mention_loader, model,
     hard_indices = []
     all_candidates_probs = []
     with torch.no_grad():
-        for i, batch in enumerate(mention_loader):
+        for i, batch in tqdm(enumerate(mention_loader)):
             if not too_large:  # entity embeddings are too large for memory
                 scores = model(batch[0], batch[1], None, None)
             else:
