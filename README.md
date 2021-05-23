@@ -15,8 +15,7 @@ python main_retriever.py --model [model saving path]  --data_dir [zeshel data di
 
 ### save retrieved candidates
 ```
-python save_candidates.py --model [pretrained model path] --data_dir [Zeshel data directory] --pre_model Bert --type_model sum_max --num_mention_vecs 128 --num_entity_vecs 128 --entity_bsz 1024  --mention_bsz 200 --store_en_hiddens --en_hidden_path [the path for saving all the entity embeddings]  --num_cands 64 
---cands_dir [the directory for saving the candidates] --gpus 0
+python save_candidates.py --model [pretrained model path] --data_dir [Zeshel data directory] --pre_model Bert --type_model sum_max --num_mention_vecs 128 --num_entity_vecs 128 --entity_bsz 1024  --mention_bsz 200 --store_en_hiddens --en_hidden_path [the path for saving all the entity embeddings]  --num_cands 64 --cands_dir [the directory for saving the candidates] --gpus 0
 
 ```
 
@@ -28,7 +27,7 @@ python main_reranker.py --model [model saving path] --data [zeshel data director
 ```
 
 ## References
-[1] [Understanding Hard Negatives in Noise Contrastive Estimation] (Zhang and Stratos, 2021) (https://arxiv.org/pdf/2104.06245.pdf)
+[1] [Understanding Hard Negatives in Noise Contrastive Estimation (Zhang and Stratos, 2021)](https://arxiv.org/pdf/2104.06245.pdf)
 ```
 @article{zhang2021understanding,
   title={Understanding Hard Negatives in Noise Contrastive Estimation},
