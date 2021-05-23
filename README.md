@@ -28,7 +28,7 @@ python main_reranker.py --model [model saving path] --data [zeshel data director
 ```
 
 ## References
-[1] [Understanding Hard Negatives in Noise Contrastive Estimation](Zhang and Stratos, 2021)(https://arxiv.org/pdf/2104.06245.pdf)
+[1] [Understanding Hard Negatives in Noise Contrastive Estimation] (Zhang and Stratos, 2021) (https://arxiv.org/pdf/2104.06245.pdf)
 ```
 @article{zhang2021understanding,
   title={Understanding Hard Negatives in Noise Contrastive Estimation},
@@ -37,4 +37,5 @@ python main_reranker.py --model [model saving path] --data [zeshel data director
   year={2021}
 }
 ```
+[2] https://github.com/lajanugen/zeshel
 
