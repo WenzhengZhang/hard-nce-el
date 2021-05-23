@@ -2,7 +2,8 @@
 This is a pytorch implementation of the paper [Understanding Hard Negatives in Noise Contrastive Estimation](https://arxiv.org/pdf/2104.06245.pdf) [1].
 
 ## requirements
-The experiments were run with python `3.7.9`, transformers `3.1.0`, pytorch `1.7.1` using NVIDIA A100 (CUDA version `11.2`). Download the public zeshel data [here](https://github.com/lajanugen/zeshel) [2].
+The experiments were run with python `3.7.9`, transformers `3.1.0`, pytorch `1.7.1` using NVIDIA A100 (CUDA version `11.2`).
+Download the public zeshel data [here](https://github.com/lajanugen/zeshel) [2].
 
 
 ## Reproducibility
