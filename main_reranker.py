@@ -384,6 +384,8 @@ if __name__ == '__main__':
                         help='use codes for mention embeddings?')
     parser.add_argument('--entity_use_codes', action='store_true',
                         help='use codes for entity embeddings?')
+    parser.add_argument('--inputmark', action='store_true',
+                        help='use mention mark at input?')
     parser.add_argument(
         "--fp16",
         action="store_true",
