@@ -23,7 +23,7 @@ python save_candidates.py --model [pretrained model path] --data_dir [Zeshel dat
 
 ### reranking
 ```
-python main_reranker.py --model [model saving path] --data [zeshel data directory] --B 2  --gradient_accumulation_steps 2 --num_workers 2 --warmup_proportion 0.2 --epochs 3  --gpus 5  --lr 2e-5 --cands_dir [candidates file directory]  --eval_method [micro or macro] --type_model full --type_bert base  --inputmark
+python main_reranker.py --model [model saving path] --data [zeshel data directory] --B 2  --gradient_accumulation_steps 2 --num_workers 2 --warmup_proportion 0.2 --epochs 3  --gpus 5  --lr 2e-5 --cands_dir [candidates file directory]  --eval_method [micro or macro] --type_model full --type_bert [base/large]  --inputmark [--fp16]
 
 ```
 
