@@ -78,8 +78,10 @@ def compute_cands_indices(men_loaders, model, en_loaders,
                                                                               j))
                         en_embeds = torch.load(file_path)
                         if hasattr(model, 'module'):
+                            model.module.evaluate_on = True
                             model.module.candidates_embeds = en_embeds
                         else:
+                            model.evaluate_on = True
                             model.candidates_embeds = en_embeds
                         score = model(batch[0], batch[1], None,
                                       None).detach()
